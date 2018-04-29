@@ -9,11 +9,29 @@
 
 #include "mov_register.h"
 
+void remove_char_from_string(char c, char *str)
+{
+    int i=0;
+    int len = strlen(str)+1;
+
+    for(i=0; i<len; i++)
+    {
+        if(str[i] == c)
+        {
+            // Move all the char following the char "c" by one to the left.
+            strncpy(&str[i],&str[i+1],len-i);
+        }
+    }
+}
+
+// int command_processor()
+
 int main(){
   char str[100];
   char cmdline[100];
 
   struct chess_register global_register;
+  global_register.t_count = 0;
   struct chess_move current_move;
   int move_counter = 0;
 
@@ -52,12 +70,13 @@ int main(){
 
       printf("Waiting for opponent to move...\n");
       read(comm_fd, str, 100);
+      remove_char_from_string('\n', str);
       // remove CR CF command
       printf("Opponent has moved: %s\n", str);
       printf("It's your turn now\n");
       fgets(cmdline, 100, stdin);
-      move_counter += 1;
-      current_move.move_id = move_counter;
+      remove_char_from_string('\n', cmdline);
+      current_move.move_id = ++move_counter;
       strcpy(current_move.white, str);
       strcpy(current_move.black, cmdline);
       add_move_to_register(&global_register, &current_move);

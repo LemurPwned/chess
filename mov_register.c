@@ -1,8 +1,11 @@
 #include "mov_register.h"
 
 void add_move_to_register(struct chess_register *cr, struct chess_move *cm){
+  printf("sizeof reg %d, sizeof cm %d\n", sizeof(cr->reg[0]), sizeof(cm));
   printf("Adding a move: (%s, %s)\n", cm->white, cm->black);
-  cr->reg[++cr->t_count] = *cm;
+  cr->reg[cr->t_count] = *cm;
+  cr->t_count += 1;
+  printf("Added successfully\n");
 }
 
 bool validate_move(char *move){
@@ -28,9 +31,10 @@ char* print_move(struct chess_move *cm, char buffer[30]){
   return buffer;
 }
 void print_register(struct chess_register *cr){
-  char buffer[30];
+  char buffer[300];
   char *res;
   for (int i = 1; i <= cr->t_count; i++){
+    bzero(&buffer, sizeof(buffer));
     res = print_move(&cr->reg[i], buffer);
     printf("%s\n", res);
   }

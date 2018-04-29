@@ -9,7 +9,7 @@
 
 
 int main(){
-  int sockfd,n;
+  int sockfd;
   char sendline[100];
   char recvline[100];
   struct sockaddr_in servaddr;
@@ -23,8 +23,10 @@ int main(){
   inet_pton(AF_INET,"127.0.0.1",&(servaddr.sin_addr));
 
   connect(sockfd,(struct sockaddr *)&servaddr,sizeof(servaddr));
-
-  bool your_turn = true;
+  int on = 1;
+  if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0){
+      printf("SO_REUSEADDR failed to be set");
+  }
   while(true)
   {
       bzero(sendline, 100);

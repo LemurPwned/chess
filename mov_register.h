@@ -8,7 +8,7 @@
 #include <stdbool.h>
 
 #define MAX_MOVES 100
-#define SINGLE_MOVE_LEN 10
+#define SINGLE_MOVE_LEN 150
 
 
 struct chess_move{
