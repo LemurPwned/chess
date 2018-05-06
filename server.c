@@ -9,6 +9,11 @@
 
 #include "mov_register.h"
 
+#define BUF_SIZE 1000
+
+struct chess_register global_register;
+struct chess_move current_move;
+
 void remove_char_from_string(char c, char *str)
 {
     int i=0;
@@ -24,15 +29,23 @@ void remove_char_from_string(char c, char *str)
     }
 }
 
-// int command_processor()
+int command_processor(char *command){
+  if (strcmp(command, "quit") == 0){
+    exit(0);
+  }
+  else if (strcmp(command, "show") == 0){
+    return 1;
+  }
+  else {
+    return 0;
+  }
+}
 
 int main(){
-  char str[100];
-  char cmdline[100];
+  char client_str[BUF_SIZE];
+  char cmdline[BUF_SIZE];
 
-  struct chess_register global_register;
   global_register.t_count = 0;
-  struct chess_move current_move;
   int move_counter = 0;
 
   int listen_fd, comm_fd;
@@ -62,26 +75,57 @@ int main(){
       printf("SO_REUSEADDR failed to be set");
   }
 
+  char msg[BUF_SIZE];
   while(true)
   {
-      bzero(str, 100);
-      bzero(cmdline, 100);
+      bzero(client_str, BUF_SIZE);
+      bzero(cmdline, BUF_SIZE);
       bzero(&current_move, sizeof(current_move));
 
-      printf("Waiting for opponent to move...\n");
-      read(comm_fd, str, 100);
-      remove_char_from_string('\n', str);
+      read(comm_fd, client_str, BUF_SIZE);
       // remove CR CF command
-      printf("Opponent has moved: %s\n", str);
+      remove_char_from_string('\n', client_str);
+      // process client command
+      if (command_processor(client_str) == 1){
+        // send register to client
+        bzero(&msg, sizeof(msg));
+        get_register(&global_register, &msg);
+        write(comm_fd, msg, strlen(msg)+1);
+        continue;
+      }
+
+      if (!validate_move(client_str)) {
+        strcpy(msg, "Invalid move, move again\n");
+        write(comm_fd, msg, strlen(msg)+1);
+        continue;
+      }
+
+      printf("Opponent has moved: %s\n", client_str);
       printf("It's your turn now\n");
-      fgets(cmdline, 100, stdin);
+      fgets(cmdline, BUF_SIZE, stdin);
+      // remove CR CF command
       remove_char_from_string('\n', cmdline);
-      current_move.move_id = ++move_counter;
-      strcpy(current_move.white, str);
+
+      // process server command
+      while (command_processor(cmdline) == 1){
+        print_register(&global_register);
+        fgets(cmdline, BUF_SIZE, stdin);
+        remove_char_from_string('\n', cmdline);
+      }
+
+      while (!validate_move(cmdline)) {
+        printf("%s\n", "Invalid move, move again");
+        fgets(cmdline, BUF_SIZE, stdin);
+        remove_char_from_string('\n', cmdline);
+      }
+
+      current_move.move_id = move_counter++;
+      strcpy(current_move.white, client_str);
       strcpy(current_move.black, cmdline);
       add_move_to_register(&global_register, &current_move);
 
       write(comm_fd, cmdline, strlen(cmdline)+1);
+      printf("Waiting for opponent to move...\n");
     }
   return 0;
 }

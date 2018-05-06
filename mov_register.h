@@ -22,8 +22,8 @@ struct chess_register{
 };
 
 void add_move_to_register(struct chess_register *cr, struct chess_move *cm);
+void print_register(struct chess_register *cr);
+char* get_register(struct chess_register *cr, char large_buffer[1000]);
 bool validate_move(char *move);
-void regex_test();
-
 
 #endif

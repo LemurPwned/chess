@@ -3,12 +3,14 @@
 void add_move_to_register(struct chess_register *cr, struct chess_move *cm){
   printf("sizeof reg %d, sizeof cm %d\n", sizeof(cr->reg[0]), sizeof(cm));
   printf("Adding a move: (%s, %s)\n", cm->white, cm->black);
-  cr->reg[cr->t_count] = *cm;
-  cr->t_count += 1;
-  printf("Added successfully\n");
+  cr->reg[cr->t_count++] = *cm;
 }
 
 bool validate_move(char *move){
+  if ((strlen(move) > 3) || (strlen(move) < 2)){
+    return false;
+  }
+  // allow all figures and no letter if pawn is to be moved
   char *regex_string = "^([kqrbn]{1})?([a-h])([1-8])";
   regex_t regex_compiled;
   if (regcomp(&regex_compiled, regex_string, REG_EXTENDED)){
@@ -26,19 +28,33 @@ bool validate_move(char *move){
   return false;
 }
 
-char* print_move(struct chess_move *cm, char buffer[30]){
+char* print_move(struct chess_move *cm, char buffer[300]){
   sprintf(buffer, "%d.%s %s", cm->move_id, cm->white, cm->black);
   return buffer;
 }
+
 void print_register(struct chess_register *cr){
   char buffer[300];
   char *res;
-  for (int i = 1; i <= cr->t_count; i++){
+  for (int i = 0; i <= cr->t_count; i++){
     bzero(&buffer, sizeof(buffer));
     res = print_move(&cr->reg[i], buffer);
     printf("%s\n", res);
   }
 }
+
+char* get_register(struct chess_register *cr, char large_buffer[1000]){
+  char buffer[300];
+  char *res;
+  strcpy(large_buffer, "\n");
+  for (int i = 0; i <= cr->t_count; i++){
+    bzero(&buffer, sizeof(buffer));
+    res = print_move(&cr->reg[i], buffer);
+    strcat(large_buffer, res);
+    strcat(large_buffer, "\n");
+  }
+}
+
 
 void regex_test(){
   char test_regex[10][6]  = {"q3", "g3", "qg3", "xg3", "3", "faf", "qg"};

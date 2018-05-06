@@ -7,11 +7,12 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#define BUF_SIZE 1000
 
 int main(){
   int sockfd;
-  char sendline[100];
-  char recvline[100];
+  char sendline[BUF_SIZE];
+  char recvline[BUF_SIZE];
   struct sockaddr_in servaddr;
 
   sockfd = socket(AF_INET,SOCK_STREAM,0);
@@ -29,16 +30,15 @@ int main(){
   }
   while(true)
   {
-      bzero(sendline, 100);
-      bzero(recvline, 100);
+      bzero(sendline, BUF_SIZE);
+      bzero(recvline, BUF_SIZE);
       // get stdin
-
       printf("It's your turn now\n");
-      fgets(sendline, 100, stdin);
+      fgets(sendline, BUF_SIZE, stdin);
       write(sockfd, sendline, strlen(sendline)+1);
 
       printf("Waiting for opponent to move...\n");
-      read(sockfd, recvline, 100);
+      read(sockfd, recvline, BUF_SIZE);
       printf("Opponent has moved: %s\n",recvline);
   }
   return 0;
