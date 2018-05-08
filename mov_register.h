@@ -6,6 +6,7 @@
 #include <string.h>
 #include <regex.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #define MAX_MOVES 100
 #define SINGLE_MOVE_LEN 150
@@ -26,5 +27,9 @@ void print_register(struct chess_register *cr);
 char* print_move(struct chess_move *cm, char buffer[300]);
 char* get_register(struct chess_register *cr, char large_buffer[1000]);
 bool validate_move(char *move);
+
+// tests
+void register_test();
+void regex_test();
 
 #endif

@@ -58,22 +58,20 @@ char* get_register(struct chess_register *cr, char large_buffer[1000]){
 
 void regex_test(){
   char test_regex[10][6]  = {"q3", "g3", "qg3", "xg3", "3", "faf", "qg"};
-  int test_result[10] = {1, 1, 1, 0, 0, 0, 0};
+  int test_result[10] = {0, 1, 1, 0, 0, 0, 0};
   for (int i = 0; i  < 6; i++){
-    printf("Current move %s: ", test_regex[i]);
-    if (validate_move(test_regex[i])){
-      printf("Matched\n");
-    }
-    else{
-      printf("No match\n");
-    }
+    assert(validate_move(test_regex[i]) == test_result[i]);
   }
 }
 
 void register_test(){
   struct chess_register cr;
+  char test_buffer[300];
+  char test_buffer2[300] = {"0.g3 qh3"};
   bzero(&cr, sizeof(cr));
   struct chess_move current_move = {0, "g3", "qh3"};
+  print_move(&current_move, test_buffer);
+  assert(strcmp(test_buffer, test_buffer2) == 0);
   add_move_to_register(&cr, &current_move);
   struct chess_move current_move2 = {1, "h3", "ka1"};
   add_move_to_register(&cr, &current_move2);

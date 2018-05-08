@@ -55,6 +55,7 @@ void receiving_process(int *mcast_sock_recv, struct ip_mreq mem){
          exit(1);
     }
     printf("%s\n", msgbuf);
+    bzero(msgbuf, sizeof(msgbuf));
   }
 }
 
