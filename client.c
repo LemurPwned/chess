@@ -15,15 +15,15 @@ int main(){
   char recvline[BUF_SIZE];
   struct sockaddr_in servaddr;
 
-  sockfd = socket(AF_INET,SOCK_STREAM,0);
-  bzero(&servaddr,sizeof servaddr);
+  sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  bzero(&servaddr, sizeof servaddr);
 
-  servaddr.sin_family=AF_INET;
-  servaddr.sin_port=htons(22000);
+  servaddr.sin_family = AF_INET;
+  servaddr.sin_port = htons(22000);
 
-  inet_pton(AF_INET,"127.0.0.1",&(servaddr.sin_addr));
+  inet_pton(AF_INET,"127.0.0.1", &(servaddr.sin_addr));
 
-  connect(sockfd,(struct sockaddr *)&servaddr,sizeof(servaddr));
+  connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
   int on = 1;
   if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0){
       printf("SO_REUSEADDR failed to be set");

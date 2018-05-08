@@ -58,6 +58,7 @@ char* get_register(struct chess_register *cr, char large_buffer[1000]){
 
 void regex_test(){
   char test_regex[10][6]  = {"q3", "g3", "qg3", "xg3", "3", "faf", "qg"};
+  int test_result[10] = {1, 1, 1, 0, 0, 0, 0};
   for (int i = 0; i  < 6; i++){
     printf("Current move %s: ", test_regex[i]);
     if (validate_move(test_regex[i])){

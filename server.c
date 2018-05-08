@@ -10,9 +10,12 @@
 #include "mov_register.h"
 
 #define BUF_SIZE 1000
+#define MCAST_ADDR "225.0.0.37"
 
 struct chess_register global_register;
 struct chess_move current_move;
+
+struct sockaddr_in multicastAddr;
 
 void remove_char_from_string(char c, char *str)
 {
@@ -41,6 +44,28 @@ int command_processor(char *command){
   }
 }
 
+void create_mcast_socket(int *mcast_sock_lock){
+  // for multicast udp socket is needed
+  *mcast_sock_lock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  int on = 1;
+  // this allows for more than one processes to bind to that address
+  if (setsockopt(*mcast_sock_lock, SOL_SOCKET, SO_REUSEADDR, &on,
+                                                            sizeof(on)) <0){
+      printf("%s\n", "Failed to set SO_REUSEADDR in a multicast socket");
+  }
+  int ttl = 2;
+  if (setsockopt(*mcast_sock_lock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl,
+                                                              sizeof(ttl)) < 0){
+      printf("%s\n", "Failed to set TTL in a multicast socket");
+  }
+
+  bzero(&multicastAddr, sizeof(multicastAddr));   /* Zero out structure */
+  multicastAddr.sin_family = AF_INET;                 /* Internet address family */
+  multicastAddr.sin_addr.s_addr = inet_addr(MCAST_ADDR);/* Multicast IP address */
+  multicastAddr.sin_port = htons(3000);         /* Multicast port */
+}
+
+
 int main(){
   char client_str[BUF_SIZE];
   char cmdline[BUF_SIZE];
@@ -62,6 +87,7 @@ int main(){
 
   bind(listen_fd, (struct sockaddr *) &servaddr, sizeof(servaddr));
 
+  printf("Starting a server!\n");
   listen(listen_fd, 10);
 
   if ((comm_fd = accept(listen_fd, (struct sockaddr*) NULL, NULL)) < 0){
@@ -76,8 +102,13 @@ int main(){
   }
 
   char msg[BUF_SIZE];
-  while(true)
-  {
+  char move_string[300];
+
+  // fetch mutlicast socket
+  int mcast_sock;
+  create_mcast_socket(&mcast_sock);
+
+  while(true){
       bzero(client_str, BUF_SIZE);
       bzero(cmdline, BUF_SIZE);
       bzero(&current_move, sizeof(current_move));
@@ -125,6 +156,11 @@ int main(){
       add_move_to_register(&global_register, &current_move);
 
       write(comm_fd, cmdline, strlen(cmdline)+1);
+      // send move to multicast socket
+
+      print_move(&current_move, &move_string);
+      sendto(mcast_sock, move_string, strlen(move_string), 0,
+              &multicastAddr, sizeof(multicastAddr));
       printf("Waiting for opponent to move...\n");
     }
   return 0;
