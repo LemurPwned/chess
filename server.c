@@ -8,6 +8,7 @@
 #include <stdlib.h>
 
 #include "mov_register.h"
+#include "sock_utils.h"
 
 #define BUF_SIZE 1000
 #define MCAST_ADDR "225.0.0.37"
@@ -16,21 +17,6 @@ struct chess_register global_register;
 struct chess_move current_move;
 
 struct sockaddr_in multicastAddr;
-
-void remove_char_from_string(char c, char *str)
-{
-    int i=0;
-    int len = strlen(str)+1;
-
-    for(i=0; i<len; i++)
-    {
-        if(str[i] == c)
-        {
-            // Move all the char following the char "c" by one to the left.
-            strncpy(&str[i],&str[i+1],len-i);
-        }
-    }
-}
 
 int command_processor(char *command){
   if (strcmp(command, "quit") == 0){
@@ -42,27 +28,6 @@ int command_processor(char *command){
   else {
     return 0;
   }
-}
-
-void create_mcast_socket(int *mcast_sock_lock){
-  // for multicast udp socket is needed
-  *mcast_sock_lock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  int on = 1;
-  // this allows for more than one processes to bind to that address
-  if (setsockopt(*mcast_sock_lock, SOL_SOCKET, SO_REUSEADDR, &on,
-                                                            sizeof(on)) <0){
-      printf("%s\n", "Failed to set SO_REUSEADDR in a multicast socket");
-  }
-  int ttl = 2;
-  if (setsockopt(*mcast_sock_lock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl,
-                                                              sizeof(ttl)) < 0){
-      printf("%s\n", "Failed to set TTL in a multicast socket");
-  }
-
-  bzero(&multicastAddr, sizeof(multicastAddr));   /* Zero out structure */
-  multicastAddr.sin_family = AF_INET;                 /* Internet address family */
-  multicastAddr.sin_addr.s_addr = inet_addr(MCAST_ADDR);/* Multicast IP address */
-  multicastAddr.sin_port = htons(3000);         /* Multicast port */
 }
 
 
@@ -79,11 +44,15 @@ int main(){
 
   listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 
-  bzero( &servaddr, sizeof(servaddr));
-
+  bzero(&servaddr, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
   servaddr.sin_addr.s_addr = htons(INADDR_ANY);
   servaddr.sin_port = htons(22000);
+
+  bzero(&multicastAddr, sizeof(multicastAddr));   /* Zero out structure */
+  multicastAddr.sin_family = AF_INET;                 /* Internet address family */
+  multicastAddr.sin_addr.s_addr = inet_addr(MCAST_ADDR);/* Multicast IP address */
+  multicastAddr.sin_port = htons(3000);         /* Multicast port */
 
   bind(listen_fd, (struct sockaddr *) &servaddr, sizeof(servaddr));
 
@@ -106,7 +75,7 @@ int main(){
 
   // fetch mutlicast socket
   int mcast_sock;
-  create_mcast_socket(&mcast_sock);
+  create_server_mcast_socket(&mcast_sock);
 
   while(true){
       bzero(client_str, BUF_SIZE);
