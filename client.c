@@ -33,13 +33,10 @@ int main(){
       bzero(sendline, BUF_SIZE);
       bzero(recvline, BUF_SIZE);
       // get stdin
-      printf("It's your turn now\n");
       fgets(sendline, BUF_SIZE, stdin);
       write(sockfd, sendline, strlen(sendline)+1);
 
-      printf("Waiting for opponent to move...\n");
       read(sockfd, recvline, BUF_SIZE);
-      printf("Opponent has moved: %s\n",recvline);
   }
   return 0;
 }

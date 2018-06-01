@@ -11,7 +11,7 @@
 #include "sock_utils.h"
 
 #define BUF_SIZE 1000
-#define MCAST_ADDR "225.0.0.37"
+#define MCAST_ADDR "226.0.0.1"
 
 struct chess_register global_register;
 struct chess_move current_move;
@@ -52,7 +52,7 @@ int main(){
   bzero(&multicastAddr, sizeof(multicastAddr));   /* Zero out structure */
   multicastAddr.sin_family = AF_INET;                 /* Internet address family */
   multicastAddr.sin_addr.s_addr = inet_addr(MCAST_ADDR);/* Multicast IP address */
-  multicastAddr.sin_port = htons(3000);         /* Multicast port */
+  multicastAddr.sin_port = htons(3300);         /* Multicast port */
 
   bind(listen_fd, (struct sockaddr *) &servaddr, sizeof(servaddr));
 
