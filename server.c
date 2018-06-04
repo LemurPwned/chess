@@ -75,7 +75,7 @@ int main(){
 
   // fetch mutlicast socket
   int mcast_sock;
-  create_server_mcast_socket(&mcast_sock);
+  create_sending_mcast_socket(&mcast_sock);
 
   while(true){
       bzero(client_str, BUF_SIZE);

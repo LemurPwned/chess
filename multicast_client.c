@@ -9,18 +9,64 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
-
+#include <pthread.h>
 
 #include "sock_utils.h"
 
 #define BUFF_SIZE 1000
-#define MCAST_ADDR "225.0.0.37"
+#define MCAST_ADDR "225.0.0.1"
 #define MAX_EVENTS 100
-struct sockaddr_in multicastAddr;
+struct sockaddr_in multicastAddrSend;
+struct sockaddr_in multicastAddrReceive;
 char alias[100];
 int epoll_fd;
 struct epoll_event event, events[MAX_EVENTS];
+int mcast_sock_send, mcast_sock_recv;
 
+
+void *read_stdin(){
+  char msg[BUFF_SIZE];
+  int nbytes;
+  while(true){
+    bzero(&msg, sizeof(msg));
+    read(0, msg, BUFF_SIZE);
+    printf("%s\n", "Type in message to send: ");
+    nbytes = sendto(mcast_sock_send, msg, strlen(msg), 0,
+                  (struct sockaddr *) &multicastAddrSend, sizeof(multicastAddrSend));
+    printf("Sending: %d, %s\n", nbytes, msg);
+  }
+}
+
+void *epoll_read(){
+  char msgbuf[BUFF_SIZE];
+  int nbytes, count;
+  int addrlen = sizeof(multicastAddrReceive);
+
+  while(true){
+    printf("%s\n","EPOLL ITERATION");
+    bzero(&msgbuf, sizeof(msgbuf));
+    // bzero(&alias_msg, sizeof(alias_msg));
+    // alias_msg = strcat(alias, " says:");
+    // get msg from stdin
+
+    // fgets(msg, BUFF_SIZE, stdin);
+    // strcat(alias_msg, msg);
+
+    count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+    for (int i = 0; i < count; i++){
+      printf("%d\n", i);
+      printf("%s\n", "READING EVENT");
+      if ((nbytes=recvfrom(events[i].data.fd, msgbuf, BUFF_SIZE, 0,
+                            (struct sockaddr *) &multicastAddrReceive, &addrlen)) < 0) {
+           perror("MESSAGE ERROR\n");
+           exit(1);
+      }
+      printf("Read: %d\n", nbytes);
+      printf("%s\n", msgbuf);
+      bzero(msgbuf, sizeof(msgbuf));
+    }
+  }
+}
 void sending_process(int *mcast_sock_send){
 
   char msg[BUFF_SIZE];
@@ -35,18 +81,12 @@ void sending_process(int *mcast_sock_send){
     fgets(msg, BUFF_SIZE, stdin);
     strcat(alias_msg, msg);
     sendto(*mcast_sock_send, alias_msg, strlen(alias_msg)-1, 0,
-                  (struct sockaddr *) &multicastAddr, sizeof(multicastAddr));
+                  (struct sockaddr *) &multicastAddrSend, sizeof(multicastAddrSend));
   }
 }
 
 void receiving_process(int *mcast_sock_recv, struct ip_mreq mem){
-
-  if (bind(*mcast_sock_recv, (struct sockaddr *) &multicastAddr,
-                                                    sizeof(multicastAddr)) < 0){
-    printf("%s\n", "Failed to bind a multicast socket");
-  }
-
-  int addrlen = sizeof(multicastAddr);
+  int addrlen = sizeof(multicastAddrReceive);
   char msgbuf[BUFF_SIZE];
   int nbytes, count;
 
@@ -55,7 +95,7 @@ void receiving_process(int *mcast_sock_recv, struct ip_mreq mem){
     for (int i = 0; i < count; i++){
       printf("%d\n", i);
       if ((nbytes=recvfrom(events[i].data.fd, msgbuf, BUFF_SIZE, 0,
-                            (struct sockaddr *) &multicastAddr, &addrlen)) < 0) {
+                            (struct sockaddr *) &multicastAddrReceive, &addrlen)) < 0) {
            perror("MESSAGE ERROR\n");
            exit(1);
       }
@@ -66,48 +106,54 @@ void receiving_process(int *mcast_sock_recv, struct ip_mreq mem){
   }
 }
 
-int main(){
-  int mcast_sock;
-  int mcast_sock_send, mcast_sock_recv;
-
-  // server multicast address
-  multicastAddr.sin_family = AF_INET;
-  multicastAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-  multicastAddr.sin_port = htons(3300);
-
-  // needed to join mcast membership group
-  struct ip_mreq memb;
-  memb.imr_multiaddr.s_addr=inet_addr(MCAST_ADDR);
-  memb.imr_interface.s_addr=htonl(INADDR_ANY);
+int main(int argc, char *argv[]){
+  bzero(&multicastAddrReceive, sizeof(multicastAddrReceive));
+  bzero(&multicastAddrSend, sizeof(multicastAddrSend));
+  // server multicast address, common to both sockets
+  printf("%d %d\n", strtol(argv[1], NULL, 10), strtol(argv[2], NULL, 10));
+  int p1 = strtol(argv[1], NULL, 10);
+  int p2 = strtol(argv[2], NULL, 10);
+  multicastAddrSend.sin_family = AF_INET;
+  multicastAddrSend.sin_addr.s_addr = inet_addr(MCAST_ADDR);
+  multicastAddrSend.sin_port = htons(p1);
 
 
-  // set sending socket
-  create_server_mcast_socket(&mcast_sock_send);
-  create_client_mcast_socket(&mcast_sock_recv, memb);
-
-  int on = 1;
-  if (setsockopt(mcast_sock_send, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on))<0){
-    perror("Failed to reuse address");
-  }
-  if (setsockopt(mcast_sock_recv, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on))<0){
-    perror("Failed to reuse address");
-  }
-
-  on = 0;
-  if (setsockopt(mcast_sock_recv, IPPROTO_IP, IP_MULTICAST_LOOP, &on, sizeof(on)) < 0){
-    printf("%s\n", "Failed to disable a multicast lopp");
-  }
-
-  // if (bind(mcast_sock_recv, (struct sockaddr *) &multicastAddr,
-  //                                                   sizeof(multicastAddr)) < 0){
-  //   printf("%s\n", "Failed to bind a multicast socket");
+  multicastAddrReceive.sin_family = AF_INET;
+  // receiving socket gets different local interface
+  multicastAddrReceive.sin_addr.s_addr = htonl(INADDR_ANY);
+  multicastAddrReceive.sin_port = htons(p2);
+  // if (setsockopt(*mcast_sock_lock, IPPROTO_IP, IP_MULTICAST_IF, &localInterface,
+  //                sizeof(localInterface)) < 0){
+  //                  perror("Multicast interface failed to be set");
   // }
+  // create two sockets
+  mcast_sock_send = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  mcast_sock_recv = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+  // bind a receiving socket
+  if (bind(mcast_sock_recv, (struct sockaddr *) &multicastAddrReceive,
+                                                    sizeof(multicastAddrReceive)) < 0){
+    printf("%s\n", "Failed to bind a multicast socket");
+  }
+  // set sending socket
+  create_sending_mcast_socket(&mcast_sock_send);
+
+  struct ip_mreq mem;
+  // needed to join mcast membership group
+  // only receiving socket
+  mem.imr_multiaddr.s_addr=inet_addr(MCAST_ADDR);
+  mem.imr_interface.s_addr=htonl(INADDR_ANY);
+  create_receiving_mcast_socket(&mcast_sock_recv, mem);
+
+
+
   // get epoll instance
   epoll_fd = epoll_create1(0);
   bzero(&event, sizeof(struct epoll_event));
   event.events = EPOLLIN;
   event.data.fd = mcast_sock_recv;
 
+  printf("%d\n", mcast_sock_recv);
   if (epoll_fd < 0){
     perror("Epoll failed");
     exit(-1);
@@ -116,64 +162,33 @@ int main(){
     perror("Failed to add epoll instance");
   }
 
-  event.events = EPOLLIN;
-  event.data.fd = 0;
-
-  if (epoll_fd < 0){
-    perror("Epoll failed");
-    exit(-1);
-  }
-  if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, 0, &event)){
-    perror("Failed to add epoll instance");
-  }
+  // event.events = EPOLLIN;
+  // event.data.fd = 0;
+  //
+  // if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, 0, &event)){
+  //   perror("Failed to add epoll instance");
+  // }
 
   printf("%s\n", "Type in your alias for the chatroom");
-  fgets(alias, 100, stdin);
-  remove_char_from_string('\n', alias);
+  // fgets(alias, 100, stdin);
+  // remove_char_from_string('\n', alias);
 
 
-  int addrlen = sizeof(multicastAddr);
   char msgbuf[BUFF_SIZE];
   int nbytes, count;
-  char msg[BUFF_SIZE];
   char *alias_msg;
-  while(true){
-    // printf("%s\n","EPOLL ITERATION");
-    count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
-    for (int i = 0; i < count; i++){
-      // printf("%d\n", i);
-      if (events[i].events & EPOLLIN){
-        if (events[i].data.fd != 0){
-          if ((nbytes=recvfrom(events[i].data.fd, msgbuf, BUFF_SIZE, 0,
-                                (struct sockaddr *) &multicastAddr, &addrlen)) < 0) {
-               perror("MESSAGE ERROR\n");
-               exit(1);
-          }
-          printf("Read: %d\n", nbytes);
-          printf("%s\n", msgbuf);
-          fflush(stdout);
-          bzero(msgbuf, sizeof(msgbuf));
-        }
-        else {
-          // printf("%s\n", alias);
-          bzero(&msg, sizeof(msg));
-          // bzero(&alias_msg, sizeof(alias_msg));
-          // alias_msg = strcat(alias, " says:");
-          // get msg from stdin
-          printf("%s\n", "Type in message to send: ");
-          // fgets(msg, BUFF_SIZE, stdin);
-          // strcat(alias_msg, msg);
-          nbytes = sendto(mcast_sock_send, alias, sizeof(alias), 0,
-                        (struct sockaddr *) &multicastAddr, sizeof(multicastAddr));
-          printf("Sending: %d\n", nbytes);
-        }
-      }
-      else {
 
-      }
-
-    }
+  pthread_t reading_stdin, reading_socket;
+  if (pthread_create(&reading_stdin, NULL, read_stdin, NULL) < 0){
+    perror("Failed creating an external thread");
   }
+  if (pthread_create(&reading_socket, NULL, epoll_read, NULL) < 0){
+    perror("Failed creating an external thread");
+  }
+
+  while(true){
+  }
+
   // if (fork() == 0) sending_process(&mcast_sock_send);
   // else receiving_process(&mcast_sock_recv, memb);
 }

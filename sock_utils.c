@@ -1,30 +1,28 @@
 #include "sock_utils.h"
 
-void create_server_mcast_socket(int *mcast_sock_lock){
+void create_sending_mcast_socket(int *mcast_sock_lock){
   // for multicast udp socket is needed
-  *mcast_sock_lock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   int on = 1;
   // this allows for more than one processes to bind to that address
   if (setsockopt(*mcast_sock_lock, SOL_SOCKET, SO_REUSEADDR, &on,
                                                             sizeof(on)) <0){
       printf("%s\n", "Failed to set SO_REUSEADDR in a multicast socket");
   }
-  int ttl = 2;
+  int ttl = 6;
   if (setsockopt(*mcast_sock_lock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl,
                                                               sizeof(ttl)) < 0){
       printf("%s\n", "Failed to set TTL in a multicast socket");
   }
 
-  on = 0;
+  on = 1;
   if (setsockopt(*mcast_sock_lock, IPPROTO_IP, IP_MULTICAST_LOOP, &on,
                                                               sizeof(on)) < 0){
       printf("%s\n", "Failed to disable loop in a multicast socket");
   }
 }
 
-void create_client_mcast_socket(int *mcast_sock_lock, struct ip_mreq mem){
+void create_receiving_mcast_socket(int *mcast_sock_lock, struct ip_mreq mem){
   // for multicast udp socket is needed
-  *mcast_sock_lock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   int on = 1;
   // this allows for more than one processes to bind to that address
   if (setsockopt(*mcast_sock_lock, SOL_SOCKET, SO_REUSEADDR, &on,
@@ -36,11 +34,14 @@ void create_client_mcast_socket(int *mcast_sock_lock, struct ip_mreq mem){
                                                             sizeof(mem)) <0){
       printf("%s\n", "Failed to set MEMBERSHIP in a multicast socket");
   }
-
-  int ttl = 2;
+  int ttl = 6;
   if (setsockopt(*mcast_sock_lock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl,
                                                               sizeof(ttl)) < 0){
       printf("%s\n", "Failed to set TTL in a multicast socket");
+  }
+  if (setsockopt(*mcast_sock_lock, IPPROTO_IP, IP_MULTICAST_LOOP, &on,
+                                                              sizeof(on)) < 0){
+      printf("%s\n", "Failed to disable loop in a multicast socket");
   }
 }
 

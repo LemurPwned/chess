@@ -11,8 +11,8 @@
 #include <errno.h>
 
 
-void create_server_mcast_socket(int *mcast_sock_lock);
-void create_client_mcast_socket(int *mcast_sock_lock, struct ip_mreq mem);
+void create_sending_mcast_socket(int *mcast_sock_lock);
+void create_receiving_mcast_socket(int *mcast_sock_lock, struct ip_mreq mem);
 void remove_char_from_string(char c, char *str);
 ssize_t	writen(int fd, const void *vptr, size_t n);
 

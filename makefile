@@ -1,4 +1,4 @@
-CFLAGS = -Wall
+CFLAGS = -Wall -pthread
 GDB = -g
 
 GLOB_OBJ = server.o client.o mov_register.o sock_utils.o multicast_client.o
