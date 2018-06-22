@@ -34,6 +34,9 @@ mov_register.o: mov_register.c mov_register.h
 test: mov_register.o test.c
 	gcc $(CVER) $(CFLAGS) mov_register.o test.c -o tests
 
+anal: 
+	gcc $(CVER) $(CFLAGS) tcp_analyzer.c -o tcp_analyzer
+
 clean:
 	rm -rf *.o
 	rm -f server client multicast_client

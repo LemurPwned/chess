@@ -6,12 +6,13 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <syslog.h>
 
 #include "mov_register.h"
 #include "sock_utils.h"
 
 #define BUF_SIZE 1000
-#define MCAST_ADDR "226.0.0.1"
+#define MCAST_ADDR "225.0.0.1"
 
 struct chess_register global_register;
 struct chess_move current_move;
@@ -20,6 +21,7 @@ struct sockaddr_in multicastAddr;
 
 int command_processor(char *command){
   if (strcmp(command, "quit") == 0){
+    closelog();
     exit(0);
   }
   else if (strcmp(command, "show") == 0){
@@ -30,17 +32,18 @@ int command_processor(char *command){
   }
 }
 
-
 int main(){
   char client_str[BUF_SIZE];
   char cmdline[BUF_SIZE];
+  int move_counter = 0;
+  int listen_fd, comm_fd;
+  struct sockaddr_in servaddr;
+
+  // opensyslog, LOG as user and include PID and print to console 
+  // in case of errors 
+  openlog("SYSTEM_LOG", LOG_PID|LOG_CONS, LOG_USER);
 
   global_register.t_count = 0;
-  int move_counter = 0;
-
-  int listen_fd, comm_fd;
-
-  struct sockaddr_in servaddr;
 
   listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -52,29 +55,34 @@ int main(){
   bzero(&multicastAddr, sizeof(multicastAddr));   /* Zero out structure */
   multicastAddr.sin_family = AF_INET;                 /* Internet address family */
   multicastAddr.sin_addr.s_addr = inet_addr(MCAST_ADDR);/* Multicast IP address */
-  multicastAddr.sin_port = htons(3300);         /* Multicast port */
+  multicastAddr.sin_port = htons(6500);         /* Multicast port */
 
   bind(listen_fd, (struct sockaddr *) &servaddr, sizeof(servaddr));
 
   printf("Starting a server!\n");
+  syslog(LOG_INFO, "Server starting...");
   listen(listen_fd, 10);
 
   if ((comm_fd = accept(listen_fd, (struct sockaddr*) NULL, NULL)) < 0){
       printf("Failed connection");
+      syslog(LOG_ERR, "Connection has failed");
+      closelog();
       exit(0);
   }
   else printf("System connected\n");
+  syslog(LOG_INFO, "Connection established");
 
   int on = 1;
-  if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0){
+  if (setsockopt(comm_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0){
       printf("SO_REUSEADDR failed to be set");
+      syslog(LOG_ERR, "SO_REUSEADDR has failed");
   }
 
   char msg[BUF_SIZE];
   char move_string[300];
 
   // fetch mutlicast socket
-  int mcast_sock;
+  int mcast_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   create_sending_mcast_socket(&mcast_sock);
 
   while(true){
@@ -126,8 +134,10 @@ int main(){
 
       write(comm_fd, cmdline, strlen(cmdline)+1);
       // send move to multicast socket
-
       print_move(&current_move, &move_string);
+      printf("%s", current_move);
+      syslog(LOG_INFO, current_move.white);
+      syslog(LOG_INFO, current_move.black);
       sendto(mcast_sock, move_string, strlen(move_string), 0,
               &multicastAddr, sizeof(multicastAddr));
       printf("Waiting for opponent to move...\n");

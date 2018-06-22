@@ -43,7 +43,6 @@ void *epoll_read(){
   int addrlen = sizeof(multicastAddrReceive);
 
   while(true){
-    printf("%s\n","EPOLL ITERATION");
     bzero(&msgbuf, sizeof(msgbuf));
     // bzero(&alias_msg, sizeof(alias_msg));
     // alias_msg = strcat(alias, " says:");
@@ -54,7 +53,6 @@ void *epoll_read(){
 
     count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
     for (int i = 0; i < count; i++){
-      printf("%d\n", i);
       printf("%s\n", "READING EVENT");
       if ((nbytes=recvfrom(events[i].data.fd, msgbuf, BUFF_SIZE, 0,
                             (struct sockaddr *) &multicastAddrReceive, &addrlen)) < 0) {
@@ -122,10 +120,7 @@ int main(int argc, char *argv[]){
   // receiving socket gets different local interface
   multicastAddrReceive.sin_addr.s_addr = htonl(INADDR_ANY);
   multicastAddrReceive.sin_port = htons(p2);
-  // if (setsockopt(*mcast_sock_lock, IPPROTO_IP, IP_MULTICAST_IF, &localInterface,
-  //                sizeof(localInterface)) < 0){
-  //                  perror("Multicast interface failed to be set");
-  // }
+
   // create two sockets
   mcast_sock_send = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   mcast_sock_recv = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
