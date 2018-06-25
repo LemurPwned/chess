@@ -60,22 +60,22 @@ void deduce_flag(int flag, char flag_buffer[64], struct tcp_stat* stat){
 int filter_packets(struct ip *ip_hdr, struct tcphdr* tcp_hdr, struct packet_filter *filter){
 	if (strcmp(filter->ip_src, "") && 
 		strcmp(inet_ntoa(ip_hdr->ip_src), filter->ip_src) != 0){
-		printf("FAILED IP SRC");
+		printf("FAILED IP SRC\n");
 		return 0;
 	}
 	if (strcmp(filter->ip_dst, "") && 
 		strcmp(inet_ntoa(ip_hdr->ip_dst), filter->ip_dst) != 0){
-		printf("FAILED IP DST");
+		printf("FAILED IP DST\n");
 		return 0;
 	}
 	if (filter->tcp_src && 
 		ntohs(tcp_hdr->th_sport) != filter->tcp_src){
-		printf("FAILED TCP SRC");
+		printf("FAILED TCP SRC\n");
 		return 0;
 	}
 	if (filter->tcp_dst &&
 		ntohs(tcp_hdr->th_dport) != filter->tcp_dst) {
-		printf("FAILED TCP DST");
+		printf("FAILED TCP DST\n");
 		return 0;
 	}
 	else{
@@ -90,6 +90,28 @@ int run_analyser(struct arguments *args){
 	struct sockaddr_ll	servaddr, cliaddr;
     int if_idx;
 
+	FILE *f;
+	cap_t cap = cap_get_proc(); 
+	cap_flag_value_t v = 0; 
+	cap_get_flag(cap, CAP_NET_ADMIN, CAP_EFFECTIVE, &v);
+	if (!v){
+		fprintf(stderr, "%s\n",
+				"Please run with admin/sudo privileges");
+		exit(-1);
+	}
+	if (strcmp(args->out_file, "") != 0){
+		f = fopen(args->out_file, "w");
+		if (f == NULL)
+		{
+			printf("Error opening file!\n");
+			exit(1);
+		}
+	}
+	else{
+		// just print to the screen
+		f = stdout;
+	}
+
     if( (if_idx =  if_nametoindex(args->interface)) == 0 ){
     	perror("interface name error:");
     	// return 1;
@@ -100,7 +122,7 @@ int run_analyser(struct arguments *args){
 		perror("socket error:");
 	}
 	if (args->promiscuous){
-		printf("%s\n", "Turning on promisc mode...");
+		fprintf(f, "%s\n", "Turning on promisc mode...");
 		struct packet_mreq mreq;
 		bzero(&mreq, sizeof(struct packet_mreq));
 		mreq.mr_ifindex = if_idx;
@@ -155,17 +177,17 @@ int run_analyser(struct arguments *args){
 					ipv4_addres_collect(ipv4hdr, &tstat);
 					deduce_flag(thdr->th_flags, flag_buffer, &tstat);
 					if (args->data_dump){
-						printf("%s", "DATA = ");
+						fprintf(f, "%s", "DATA = ");
 						char *data = buffer + sizeof(struct ethhdr) +
 									 sizeof(struct ip) + sizeof(struct tcphdr);
 						for(int k=0; k< (n-sizeof(struct ethhdr)+
 								sizeof(struct ip)+sizeof(struct tcphdr)); k++){
 							if(isprint(data[k]))
-								printf("%c",data[k] );
+								fprintf(f, "%c",data[k] );
 							else
-								printf("%s", "-");		
+								fprintf(f,"%s", "-");		
 						}
-						printf("%s", "\n");
+						fprintf(f, "%s", "\n");
 					}	
 					fflush(stdout);			
 				}
@@ -176,15 +198,15 @@ int run_analyser(struct arguments *args){
 		}
 	}
 
-	printf("\nReceived %d packets\n", tstat.packet_count);
-	printf("TCP FLAGS: ACK %d, PUSH %d, SYNC %d\n", tstat.fstat.ack, 
+	fprintf(f, "\nReceived %d packets\n", tstat.packet_count);
+	fprintf(f, "TCP FLAGS SUMMARY: ACK %d, PUSH %d, SYNC %d\n", 
+													tstat.fstat.ack, 
 													tstat.fstat.push,
 													tstat.fstat.syn);
-	printf("WHATEWAH");
-	printf("ADDRESS STACK: %d\n", tstat.astat.acount);
+	fprintf(f, "ADDRESS STACK: %d\n", tstat.astat.acount);
 	for (int i=0; i < tstat.astat.acount; i++){
-		printf("SRC: %s\n", tstat.astat.src_addr_stack[i]);
-		printf("DST: %s\n", tstat.astat.dst_addr_stack[i]);
+		fprintf(f, "SRC: %s\n", tstat.astat.src_addr_stack[i]);
+		fprintf(f, "DST: %s\n", tstat.astat.dst_addr_stack[i]);
 	}
 	return 0;
 }

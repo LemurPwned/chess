@@ -1,13 +1,17 @@
 #include <sys/socket.h>
-#include <netpacket/packet.h>
-#include <net/ethernet.h>
+#include <sys/capability.h>
+#include <linux/capability.h>
 
-#include <arpa/inet.h> 
+#include <netpacket/packet.h>
+
 #include <netinet/tcp.h>
 #include <netinet/ip.h>
 #include <netinet/in.h> 
 #include <net/ethernet.h>
 #include <net/if.h>
+#include <net/ethernet.h>
+
+#include <arpa/inet.h> 
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,6 +33,8 @@ struct arguments
   char *interface;
   bool data_dump;
   bool promiscuous;
+
+  char *out_file;
 };
 
 enum FLAG_TYPE{

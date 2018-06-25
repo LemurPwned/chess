@@ -1,4 +1,4 @@
-CFLAGS = -Wall -pthread
+CFLAGS = -Wall -pthread -lcap
 GDB = -g
 
 GLOB_OBJ = server.o client.o mov_register.o sock_utils.o multicast_client.o
@@ -38,7 +38,7 @@ analyser: tcp_analyzer.o
 	gcc $(CVER) $(CFLAGS) tcp_analyzer.o filter_args.c -o tcp_analyzer
 
 tcp_analyzer.o: tcp_analyzer.c
-	gcc -c tcp_analyzer.c
+	gcc -c -lcap tcp_analyzer.c
 
 
 clean:
