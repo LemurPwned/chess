@@ -1,53 +1,63 @@
-#include <sys/socket.h>
-#include <netpacket/packet.h>
-#include <net/ethernet.h> /* the L2 protocols */
-#include <net/if.h>
-#include <strings.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <netinet/in.h>  /* sockaddr_in{} and other Internet defns */
-#include <arpa/inet.h>   /* inet(3) functions */
-#include <netinet/udp.h>
-#include <netinet/tcp.h>
-
-#include <netinet/ip.h>
-#include <netinet/ip6.h>
-#include <unistd.h>
-#include <ctype.h>
+#include "tcp_analyzer.h"
 
 
 #define SA struct sockaddr
 //#define MYPTNO 0x0800 //IPv4
-#define MYPTNO ETH_P_ALL
 //#define MYPTNO ETH_P_IPV6
 
-void print_flag(int flag){
-	switch(flag){
-		case 0x01:
-			printf("TH_FIN");
-			break;
-		case 0x02:
-			printf("TH_SYN");
-			break;
-		case 0x04:
-			printf("TH_RST");
-			break;
-		case 0x08:
-			printf("TH_PUSH");
-			break;
-		case 0x10:
-			printf("TH_ACK");
-			break;
-		case 0x20:
-			printf("TH_URG");
-			break;
-		default:
-			printf("COMBINATION OF FLAGS");
-			break;
+void ipv4_addres_collect(struct ip* ip_header, struct tcp_stat* stat){
+    stat->astat.src_addr_stack[stat->packet_count] = (char *) malloc(sizeof(char)*200);
+    stat->astat.dst_addr_stack[stat->packet_count] = (char *) malloc(sizeof(char)*200);
+    char *addr = inet_ntoa(ip_header->ip_src);
+	if (!address_in_stack(stat->astat.src_addr_stack, addr, stat->astat.acount)){
+    	strcpy(stat->astat.src_addr_stack[stat->packet_count], addr);
+		stat->astat.acount++;
 	}
-	printf("\n");
+    addr = inet_ntoa(ip_header->ip_dst);
+	if (!address_in_stack(stat->astat.src_addr_stack, addr, stat->astat.acount)){
+    	strcpy(stat->astat.dst_addr_stack[stat->packet_count], addr);
+		stat->astat.acount++;
+	}
 }
+
+int address_in_stack(char **address_stack, char *new_address, int max_address){
+    for (int i = 0; i < max_address; i++){
+        if (!strcmp(address_stack[i], new_address)){
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void deduce_flag(int flag, char flag_buffer[64], struct tcp_stat* stat){
+	bzero(flag_buffer, sizeof(char)*64);
+	strcpy(flag_buffer, "");
+	if (flag & 0x01){
+		strcat(flag_buffer, "FIN ");
+		stat->fstat.fin++;
+	}
+	if (flag & 0x02){
+		strcat(flag_buffer, "SYN ");
+		stat->fstat.syn ++;
+	}
+	if (flag & 0x04){
+		strcat(flag_buffer, "RST ");
+		stat->fstat.rst ++;
+	}
+	if (flag & 0x08){
+		strcat(flag_buffer, "PUSH ");
+		stat->fstat.push ++;
+	}
+	if (flag & 0x10){
+		strcat(flag_buffer, "ACK ");
+		stat->fstat.ack ++;
+	}
+	if (flag & 0x20){
+		strcat(flag_buffer, "URG ");
+		stat->fstat.urg ++;
+	}
+}
+
 
 int main(int argc, char **argv)
 {
@@ -69,35 +79,42 @@ int main(int argc, char **argv)
     	return 1;
     }
 
-	sockfd = socket(PF_PACKET, SOCK_RAW, htons(MYPTNO));
+	sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 	if( sockfd < 0 )
 		perror("socket error:");
 
-
-    struct packet_mreq mreq;
-	bzero(&mreq, sizeof(struct packet_mreq));
-    mreq.mr_ifindex = if_idx;
-    mreq.mr_type = PACKET_MR_PROMISC;
-    if (setsockopt(sockfd, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mreq, sizeof(struct packet_mreq)) < 0){
-        perror("Failed to set PROMISCUOUS MODE");
-        return -1;
-    }
+	if (strcmp(argv[1], "promsc") == 0){
+		printf("Turning on promisc mode...\n");
+		struct packet_mreq mreq;
+		bzero(&mreq, sizeof(struct packet_mreq));
+		mreq.mr_ifindex = if_idx;
+		mreq.mr_type = PACKET_MR_PROMISC;
+		if (setsockopt(sockfd, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mreq, sizeof(struct packet_mreq)) < 0){
+			perror("Failed to set PROMISCUOUS MODE");
+			return -1;
+		}
+	}
 
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sll_family = AF_PACKET;
-	servaddr.sll_protocol = htons(MYPTNO);
+	servaddr.sll_protocol = htons(ETH_P_ALL);
 //	servaddr.sll_ifindex = 0;//bind to every interface
 	servaddr.sll_ifindex = if_idx;
-
-	// if( bind(sockfd, (SA *) &servaddr, sizeof(servaddr)) < 0 )
-	// 	perror("bind error:");
 
 	bzero(&cliaddr, sizeof(cliaddr));
 
 	char buff[2048];
+	char flag_buffer[64];
 	int n = 0;
 	int i=0,j =0;
-	for(;;){
+
+	struct tcp_stat tstat;
+	bzero(&tstat, sizeof(struct tcp_stat));
+	tstat.astat.src_addr_stack =  (char **)malloc(sizeof(char *)*100);
+	tstat.astat.dst_addr_stack =  (char **)malloc(sizeof(char *)*100);
+	
+
+	while(1){
 		int length=sizeof(cliaddr);
 		n = recvfrom(sockfd, buff, 2048, 0, (SA*)&cliaddr, &length);
 		if( n < 0 )
@@ -114,19 +131,16 @@ int main(int argc, char **argv)
 
 			struct ethhdr *hdr;
 			struct ip *ipv4hdr;
-			struct udphdr *uhdr;
 			struct tcphdr *thdr;
 
 			hdr = (struct ethhdr *)buff;
 			ipv4hdr = (struct ip *)(buff+sizeof(struct ethhdr));
-			// uhdr = (struct udphdr *)(buff+sizeof(struct ethhdr)+sizeof(struct ip));
 			thdr = (struct tcphdr *)(buff + sizeof(struct ethhdr) + sizeof(struct ip));
-  			printf("Ethernet proto: %x\n", ntohs(hdr->h_proto));
-			printf("IP protocol: %x\n", ipv4hdr->ip_p);
+  			// printf("Ethernet proto: %x\n", ntohs(hdr->h_proto));
+			// printf("IP protocol: %x\n", ipv4hdr->ip_p);
 			fflush(stdout);
 
 			if( (ntohs(hdr->h_proto) == ETHERTYPE_IP) &&  (ipv4hdr->ip_p == IPPROTO_TCP) ){
-
 				printf("SRC MAC addr = %02x:%02x:%02x:%02x:%02x:%02x\n", 
 					(int) hdr->h_source[0], (int) hdr->h_source[1], (int) hdr->h_source[2],
 					(int) hdr->h_source[3], (int) hdr->h_source[4],(int) hdr->h_source[5] );
@@ -143,7 +157,11 @@ int main(int argc, char **argv)
 				char *out=buff+sizeof(struct ethhdr)+sizeof(struct ip)+sizeof(struct tcphdr);
 				int k=0;
 				printf("TCP FLAGS %x\n", thdr->th_flags);
-				print_flag(thdr->th_flags);
+
+				ipv4_addres_collect(ipv4hdr, &tstat);
+				deduce_flag(thdr->th_flags, flag_buffer, &tstat);
+
+				printf("FLAGS: %s\n", flag_buffer);
 				printf("DATA = ");
 				
 				for(k=0; k< (n-sizeof(struct ethhdr)+sizeof(struct ip)+sizeof(struct tcphdr)); k++){
@@ -155,14 +173,21 @@ int main(int argc, char **argv)
 				printf("\n");
 				fflush(stdout);
 				i++;
+				tstat.packet_count ++;
 				if( i > 10)
 					break;
 			}
 		}
 	}
 
-	printf("\nReceived %d packets\n",j);
-
+	printf("\nReceived %d packets\n", tstat.packet_count);
+	printf("TCP FLAGS: ACK %d, PUSH %d, SYNC %d\n", tstat.fstat.ack, 
+													tstat.fstat.push,
+													tstat.fstat.syn);
+	for (int i=0; i < tstat.astat.acount; i++){
+		printf("SRC: %s\n", tstat.astat.src_addr_stack[i]);
+		printf("DST: %s\n", tstat.astat.dst_addr_stack[i]);
+	}
 	return 0;
 }
 
