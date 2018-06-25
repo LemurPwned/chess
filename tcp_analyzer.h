@@ -14,8 +14,22 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <stdbool.h>
 
+#define IP_FILTER 0x01
+#define TCP_FILTER 0x02
 
+struct arguments
+{
+  int packets;
+  int src_port;            
+  int dst_port;              
+  char *ip_source;
+  char *ip_dest;            
+  char *interface;
+  bool data_dump;
+  bool promiscuous;
+};
 
 enum FLAG_TYPE{
     FIN = 0x01,
@@ -51,6 +65,17 @@ struct tcp_stat{
     struct param_stat pstat;
 };
 
-void deduce_flag(int, char flag_buffer[64], struct tcp_stat*);
+struct packet_filter{
+    char *ip_src;
+    char *ip_dst;
+    int tcp_src;
+    int tcp_dst;
+};
+
 void ipv4_addres_collect(struct ip*, struct tcp_stat*);
+void deduce_flag(int, char flag_buffer[64], struct tcp_stat*);
 int address_in_stack(char **, char *, int);
+
+int filter_packets(struct ip *ip_hdr, struct tcphdr* tcp_hdr,
+				   struct packet_filter *filter);
+int run_analyser(struct arguments *);

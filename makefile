@@ -34,8 +34,12 @@ mov_register.o: mov_register.c mov_register.h
 test: mov_register.o test.c
 	gcc $(CVER) $(CFLAGS) mov_register.o test.c -o tests
 
-anal: 
-	gcc $(CVER) $(CFLAGS) tcp_analyzer.c -o tcp_analyzer
+analyser: tcp_analyzer.o
+	gcc $(CVER) $(CFLAGS) tcp_analyzer.o filter_args.c -o tcp_analyzer
+
+tcp_analyzer.o: tcp_analyzer.c
+	gcc -c tcp_analyzer.c
+
 
 clean:
 	rm -rf *.o
