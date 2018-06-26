@@ -7,9 +7,9 @@
 #include <netinet/tcp.h>
 #include <netinet/ip.h>
 #include <netinet/in.h> 
+#include <netinet/ether.h>
 #include <net/ethernet.h>
 #include <net/if.h>
-#include <net/ethernet.h>
 
 #include <arpa/inet.h> 
 
@@ -26,6 +26,9 @@
 struct arguments
 {
   int packets;
+  int max_length;
+  int min_length;
+
   int src_port;            
   int dst_port;              
   char *ip_source;
@@ -59,13 +62,17 @@ struct ipv4_addr_stat{
     int acount;
     char **dst_addr_stack;
     char **src_addr_stack;
+    int rep_dst[100];
+    int rep_src[100];
 };
 
 struct param_stat{
     int window;
 };
+
 struct tcp_stat{
     int packet_count;
+    int passed_packet;
     struct flag_stats fstat;
     struct ipv4_addr_stat astat;
     struct param_stat pstat;

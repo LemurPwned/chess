@@ -2,27 +2,32 @@
 
 
 void ipv4_addres_collect(struct ip* ip_header, struct tcp_stat* stat){
-    stat->astat.src_addr_stack[stat->packet_count] = (char *) malloc(sizeof(char)*200);
-    stat->astat.dst_addr_stack[stat->packet_count] = (char *) malloc(sizeof(char)*200);
-    char *addr = inet_ntoa(ip_header->ip_src);
-	if (!address_in_stack(stat->astat.src_addr_stack, addr, 
-											stat->astat.acount)){
-    	strcpy(stat->astat.src_addr_stack[stat->packet_count], addr);
+    stat->astat.src_addr_stack[stat->astat.acount] = (char *) malloc(sizeof(char)*200);
+    stat->astat.dst_addr_stack[stat->astat.acount] = (char *) malloc(sizeof(char)*200);
+    char *src_addr = inet_ntoa(ip_header->ip_src);
+	char *dst_addr = inet_ntoa(ip_header->ip_dst);
+	int a = address_in_stack(stat->astat.src_addr_stack, src_addr, 
+											stat->astat.acount);
+	int b = address_in_stack(stat->astat.dst_addr_stack, dst_addr, 
+											stat->astat.acount);
+	if (!a && !b){
+    	strcpy(stat->astat.src_addr_stack[stat->astat.acount], src_addr);
+    	strcpy(stat->astat.dst_addr_stack[stat->astat.acount], dst_addr);
+		stat->astat.rep_src[a] = 1;
+		stat->astat.rep_dst[b] = 1;
 		stat->astat.acount++;
 	}
-    addr = inet_ntoa(ip_header->ip_dst);
-	if (!address_in_stack(stat->astat.src_addr_stack, addr, 
-											stat->astat.acount)){
-    	strcpy(stat->astat.dst_addr_stack[stat->packet_count], addr);
-		stat->astat.acount++;
+	else{
+		stat->astat.rep_src[a]++;
+		stat->astat.rep_dst[b]++;
 	}
 }
 
 int address_in_stack(char **address_stack, char *new_address, 
-				int max_address){
+					 int max_address){
     for (int i = 0; i < max_address; i++){
         if (!strcmp(address_stack[i], new_address)){
-            return 1;
+            return i;
         }
     }
     return 0;
@@ -165,17 +170,29 @@ int run_analyser(struct arguments *args){
 			perror("socket error:");
 		else{
 			buffer[n] = 0;
-			struct ethhdr *hdr;
+			if (n > args->max_length || n < args->min_length){
+				fprintf(f, "%d, %s\n", args->max_length, "Packet size invalid, skipping...");
+				continue;
+			}
+			struct ethhdr *eth;
 			struct ip *ipv4hdr;
 			struct tcphdr *thdr;
 
-			hdr = (struct ethhdr *)buffer;
+			eth = (struct ethhdr *)buffer;
 			ipv4hdr = (struct ip *)(buffer+sizeof(struct ethhdr));
 			thdr = (struct tcphdr *)(buffer + sizeof(struct ethhdr) + sizeof(struct ip));
-			if( (ntohs(hdr->h_proto) == ETHERTYPE_IP) &&  (ipv4hdr->ip_p == IPPROTO_TCP) ){
-				if (filter_packets(&ipv4hdr, &thdr, &pkt_filter)){		
+			if( (ntohs(eth->h_proto) == ETHERTYPE_IP) && (ipv4hdr->ip_p == IPPROTO_TCP) ){
+				fprintf(f, "%s\n", "-----------------------");
+				if (filter_packets(ipv4hdr, thdr, &pkt_filter)){	
+					fprintf(f, "PACKET NO. %d\n", tstat.packet_count);
+					fprintf(f, "LENGTH: %d\n", n);
+					fprintf(f, "IP_SRC: %s\nIP_DST: %s\n", inet_ntoa(ipv4hdr->ip_src),
+														   inet_ntoa(ipv4hdr->ip_dst));
+					fprintf(f, "MAC_SRC: %s\nMAC_DST: %s\n", ether_ntoa(eth->h_dest),
+														     ether_ntoa(eth->h_source));
 					ipv4_addres_collect(ipv4hdr, &tstat);
 					deduce_flag(thdr->th_flags, flag_buffer, &tstat);
+					fprintf(f, "FLAGS: %s\n", flag_buffer);
 					if (args->data_dump){
 						fprintf(f, "%s", "DATA = ");
 						char *data = buffer + sizeof(struct ethhdr) +
@@ -183,7 +200,7 @@ int run_analyser(struct arguments *args){
 						for(int k=0; k< (n-sizeof(struct ethhdr)+
 								sizeof(struct ip)+sizeof(struct tcphdr)); k++){
 							if(isprint(data[k]))
-								fprintf(f, "%c",data[k] );
+								fprintf(f, "%c",data[k]);
 							else
 								fprintf(f,"%s", "-");		
 						}
@@ -191,10 +208,11 @@ int run_analyser(struct arguments *args){
 					}	
 					fflush(stdout);			
 				}
-				tstat.packet_count++;
-				if( tstat.packet_count > args->packets)
-					break;
+				tstat.passed_packet++;
 			}
+			tstat.packet_count++;
+			if( tstat.packet_count > args->packets)
+				break;
 		}
 	}
 
@@ -205,8 +223,10 @@ int run_analyser(struct arguments *args){
 													tstat.fstat.syn);
 	fprintf(f, "ADDRESS STACK: %d\n", tstat.astat.acount);
 	for (int i=0; i < tstat.astat.acount; i++){
-		fprintf(f, "SRC: %s\n", tstat.astat.src_addr_stack[i]);
-		fprintf(f, "DST: %s\n", tstat.astat.dst_addr_stack[i]);
+		fprintf(f, "SRC: %s, %d\n", tstat.astat.src_addr_stack[i], 
+									tstat.astat.rep_src[i]);
+		fprintf(f, "DST: %s, %d\n", tstat.astat.dst_addr_stack[i],
+									tstat.astat.rep_dst[i]);
 	}
 	return 0;
 }
