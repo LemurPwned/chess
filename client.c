@@ -28,15 +28,15 @@ int main(){
   if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0){
       printf("SO_REUSEADDR failed to be set");
   }
-  while(true)
-  {
-      bzero(sendline, BUF_SIZE);
-      bzero(recvline, BUF_SIZE);
-      // get stdin
-      fgets(sendline, BUF_SIZE, stdin);
-      write(sockfd, sendline, strlen(sendline)+1);
-
-      read(sockfd, recvline, BUF_SIZE);
+  while(true){
+    bzero(sendline, BUF_SIZE);
+    bzero(recvline, BUF_SIZE);
+    // get stdin
+    printf("Waiting for opponent...\n");
+    read(sockfd, recvline, BUF_SIZE);
+    printf("%s\n", recvline);
+    fgets(sendline, BUF_SIZE, stdin);
+    write(sockfd, sendline, strlen(sendline)+1);
   }
   return 0;
 }
