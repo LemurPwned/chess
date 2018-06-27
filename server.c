@@ -20,19 +20,6 @@ struct chess_move current_move;
 
 struct sockaddr_in multicastAddr;
 
-int command_processor(char *command){
-  if (strcmp(command, "quit") == 0){
-    closelog();
-    exit(0);
-  }
-  else if (strcmp(command, "show") == 0){
-    return 1;
-  }
-  else {
-    return 0;
-  }
-}
-
 int process_command(char *command, int socket){
   if (strcmp(command, "quit") == 0){
     closelog();
@@ -130,6 +117,7 @@ int main(){
     bzero(&current_move, sizeof(current_move));
     n = write(white_fd, msg, strlen(msg)+1);
     if (n < 0){
+      syslog(LOG_ERR, "Write error");
       perror("Write error");
     }
     while(true) {
@@ -137,6 +125,7 @@ int main(){
       // get move from white
       n = read(white_fd, move_string, BUF_SIZE);
       if (n < 0){
+        syslog(LOG_ERR, "Read error");
         perror("Read error");
       }
       remove_char_from_string('\n', move_string);
@@ -149,6 +138,7 @@ int main(){
         strcpy(msg, "Invalid move. Please move again");
         n = write(white_fd, msg, strlen(msg)+1);
         if (n < 0){
+          syslog(LOG_ERR, "Write error");
           perror("Write error");
         }
       }
@@ -165,6 +155,7 @@ int main(){
     strcat(msg, "Your move");
     n = write(black_fd, msg, strlen(msg)+1);
     if (n < 0){
+      syslog(LOG_ERR, "Write error");
       perror("Write error");
     }
     while(true) {
@@ -172,6 +163,7 @@ int main(){
       // get move from black
       n = read(black_fd, move_string, BUF_SIZE);
       if (n < 0){
+        syslog(LOG_ERR, "Read error");
         perror("Read error");
       }
       remove_char_from_string('\n', move_string);
@@ -184,6 +176,7 @@ int main(){
         strcpy(msg, "Invalid move. Please move again");
         n = write(black_fd, msg, strlen(msg)+1);
         if (n < 0){
+          syslog(LOG_ERR, "Write error");
           perror("Write error");
         }
       }
@@ -193,69 +186,13 @@ int main(){
       }
     }
     current_move.move_id = move_counter++;
+    syslog(LOG_INFO, current_move.white);
+    syslog(LOG_INFO, current_move.black);
     bzero(&move_string, sizeof move_string);
     print_move(&current_move, &move_string);
     add_move_to_register(&global_register, &current_move); 
     sendto(mcast_sock, move_string, strlen(move_string), 0,
               &multicastAddr, sizeof(multicastAddr)); 
   }
-  return 0;
-
-  // while(true){
-  //     bzero(client_str, BUF_SIZE);
-  //     bzero(cmdline, BUF_SIZE);
-
-  //     read(comm_fd, client_str, BUF_SIZE);
-  //     // remove CR CF command
-  //     remove_char_from_string('\n', client_str);
-  //     // process client command
-  //     if (command_processor(client_str) == 1){
-  //       // send register to client
-  //       bzero(&msg, sizeof(msg));
-  //       get_register(&global_register, &msg);
-  //       write(comm_fd, msg, strlen(msg)+1);
-  //       continue;
-  //     }
-
-  //     if (!validate_move(client_str)) {
-  //       strcpy(msg, "Invalid move, move again\n");
-  //       write(comm_fd, msg, strlen(msg)+1);
-  //       continue;
-  //     }
-
-  //     printf("Opponent has moved: %s\n", client_str);
-  //     printf("It's your turn now\n");
-  //     fgets(cmdline, BUF_SIZE, stdin);
-  //     // remove CR CF command
-  //     remove_char_from_string('\n', cmdline);
-
-  //     // process server command
-  //     while (command_processor(cmdline) == 1){
-  //       print_register(&global_register);
-  //       fgets(cmdline, BUF_SIZE, stdin);
-  //       remove_char_from_string('\n', cmdline);
-  //     }
-
-  //     while (!validate_move(cmdline)) {
-  //       printf("%s\n", "Invalid move, move again");
-  //       fgets(cmdline, BUF_SIZE, stdin);
-  //       remove_char_from_string('\n', cmdline);
-  //     }
-
-  //     current_move.move_id = move_counter++;
-  //     strcpy(current_move.white, client_str);
-  //     strcpy(current_move.black, cmdline);
-  //     add_move_to_register(&global_register, &current_move);
-
-  //     write(comm_fd, cmdline, strlen(cmdline)+1);
-  //     // send move to multicast socket
-  //     print_move(&current_move, &move_string);
-  //     printf("%s", current_move);
-  //     syslog(LOG_INFO, current_move.white);
-  //     syslog(LOG_INFO, current_move.black);
-  //     sendto(mcast_sock, move_string, strlen(move_string), 0,
-  //             &multicastAddr, sizeof(multicastAddr));
-      // printf("Waiting for opponent to move...\n");
-  //   }
   return 0;
 }
