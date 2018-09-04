@@ -35,11 +35,10 @@ test: mov_register.o test.c
 	gcc $(CVER) $(CFLAGS) mov_register.o test.c -o tests
 
 analyser: tcp_analyzer.o
-	gcc $(CVER) $(CFLAGS) tcp_analyzer.o filter_args.c -o tcp_analyzer
+	gcc $(CVER) tcp_analyzer.o filter_args.c -o tcp_analyzer $(CFLAGS) 
 
 tcp_analyzer.o: tcp_analyzer.c
-	gcc -c -lcap tcp_analyzer.c
-
+	gcc -c tcp_analyzer.c -lcap 
 
 clean:
 	rm -rf *.o

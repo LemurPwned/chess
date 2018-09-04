@@ -1,4 +1,5 @@
 #include "tcp_analyzer.h"
+#include <errno.h>
 
 
 void ipv4_addres_collect(struct ip* ip_header, struct tcp_stat* stat){
@@ -119,12 +120,15 @@ int run_analyser(struct arguments *args){
 
     if( (if_idx =  if_nametoindex(args->interface)) == 0 ){
     	perror("interface name error:");
+		exit(-1);
     	// return 1;
     }
 
 	sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 	if( sockfd < 0 ){
-		perror("socket error:");
+		printf("%d, %d\n", errno, sockfd);
+		perror("While creating RAW socket, socket error:");
+		exit(-1);
 	}
 	if (args->promiscuous){
 		fprintf(f, "%s\n", "Turning on promisc mode...");
@@ -166,8 +170,10 @@ int run_analyser(struct arguments *args){
 		int length=sizeof(cliaddr);
 		n = recvfrom(sockfd, buffer, 2048, 0, 
 					(struct sockaddr*)&cliaddr, &length);
-		if( n < 0 )
+		if( n < 0 ){
 			perror("socket error:");
+			exit(-1);
+		}
 		else{
 			buffer[n] = 0;
 			if (n > args->max_length || n < args->min_length){

@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "sock_utils.h"
 
@@ -24,20 +25,27 @@ struct epoll_event event, events[MAX_EVENTS];
 int mcast_sock_send, mcast_sock_recv;
 
 
+time_t rawtime;
+struct tm * timeinfo;
+
 void *read_stdin(){
-  char msg[BUFF_SIZE], alias_msg[BUFF_SIZE];
+  char msg[BUFF_SIZE], send_msg[BUFF_SIZE];
   int nbytes;
   printf("%s\n", "Type in message to send:");
   while(true){
     bzero(&msg, sizeof(msg));
-    bzero(&alias_msg, sizeof(alias_msg));
     read(0, msg, BUFF_SIZE);
+    time ( &rawtime );
+    timeinfo = localtime ( &rawtime );
     if (strcmp(msg, "quit\n") == 0){
+      bzero(&msg, sizeof(msg));
+      sprintf(msg, "%s: %s has left the chat...\n", asctime(timeinfo), alias);
+      nbytes = sendto(mcast_sock_send, msg, strlen(msg), 0,
+              (struct sockaddr *) &multicastAddrSend, sizeof(multicastAddrSend));
       exit(0);
     }
-    strcpy(alias_msg, alias);
-    strcat(alias_msg, msg);
-    nbytes = sendto(mcast_sock_send, alias_msg, strlen(alias_msg), 0,
+    sprintf(send_msg, "%s - %s says: %s\n", asctime(timeinfo), alias, msg);
+    nbytes = sendto(mcast_sock_send, send_msg, strlen(send_msg), 0,
                   (struct sockaddr *) &multicastAddrSend, sizeof(multicastAddrSend));
   }
 }
@@ -125,10 +133,13 @@ int main(int argc, char *argv[]){
   fgets(alias, 100, stdin);
   remove_char_from_string('\n', alias);
   char msg[1024];
-  sprintf(msg, "New person has joined the chat: %s\n", alias);
+
+  time ( &rawtime );
+  timeinfo = localtime ( &rawtime );
+  sprintf(msg, "%s - new person has joined the chat: %s\n", 
+                                     asctime (timeinfo), alias);
   sendto(mcast_sock_send, msg, strlen(msg), 0,
                   (struct sockaddr *) &multicastAddrSend, sizeof(multicastAddrSend));
-  strcat(alias, ": ");
 
   pthread_t reading_stdin, reading_socket;
   if (pthread_create(&reading_stdin, NULL, read_stdin, NULL) < 0){

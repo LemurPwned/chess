@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <syslog.h>
+#include <signal.h>
 
 #include "mov_register.h"
 #include "sock_utils.h"
@@ -17,6 +18,34 @@
 
 struct chess_register global_register;
 struct chess_move current_move;
+
+struct sigaction siga;
+volatile sig_atomic_t move_on_flag = 1;
+int default_timeout;
+int current_socket;
+
+
+void move_timeout(int sig){
+  // changes move_on_flag to 0 which means that 
+  // the move is over
+  move_on_flag = 0;
+  char *err_msg[BUF_SIZE];
+  sprintf(err_msg, "You ran out of time. Game lost...\n");
+  int n = write(current_socket, err_msg, strlen(err_msg));
+  close(current_socket);
+  exit(-1); 
+} 
+
+void reset_and_start_timer(int time_required){
+  move_on_flag = 1; // resets the signal timer
+  // sets up the alarm again
+  siga.sa_handler = move_timeout;
+  siga.sa_flags = 0; 
+  if (sigaction(SIGALRM, &siga, NULL) < 0){
+    perror("Sigaction");
+  }
+  alarm(time_required);
+}
 
 int process_command(char *command, int socket){
   if (strcmp(command, "quit") == 0){
@@ -37,7 +66,7 @@ int process_command(char *command, int socket){
   } 
 }
 
-int main(){
+int main(int argc, char *argv[]){
   char client_str[BUF_SIZE];
   char cmdline[BUF_SIZE];
   char msg[BUF_SIZE];
@@ -65,7 +94,7 @@ int main(){
 
   bzero(&multicastAddr, sizeof(multicastAddr));   /* Zero out structure */
   multicastAddr.sin_family = AF_INET;                 /* Internet address family */
-  multicastAddr.sin_addr.s_addr = inet_addr(MCAST_ADDR);/* Multicast IP address */
+  multicastAddr.sin_addr.s_addr = inet_addr(MCAST_ADDR); /* Multicast IP address */
   multicastAddr.sin_port = htons(1234);         /* Multicast port */
 
   local_interface.s_addr = inet_addr("127.0.0.1");
@@ -108,6 +137,13 @@ int main(){
   else printf("Black connected\n");
   syslog(LOG_INFO, "Connection established");
 
+
+  if (argc < 2){
+    default_timeout = 30; // 30 sec is default 
+  }else{
+    default_timeout = strtol(argv[1], NULL, 10);
+  }
+  printf("Timeout for move in this game is %d seconds.\n", default_timeout);
   while(true){
     // white begin
     bzero(&msg, sizeof msg);
@@ -122,6 +158,8 @@ int main(){
     while(true) {
       bzero(&move_string, sizeof move_string);
       // get move from white
+      current_socket = white_fd;
+      reset_and_start_timer(default_timeout);
       n = read(white_fd, move_string, BUF_SIZE);
       if (n < 0){
         syslog(LOG_ERR, "Read error");
@@ -151,7 +189,7 @@ int main(){
     bzero(&msg, sizeof msg);
     // black move
     sprintf(msg, "Opponent has moved %s\n", current_move.white);
-    strcat(msg, "Your move");
+    strcat(msg, "Black move");
     n = write(black_fd, msg, strlen(msg)+1);
     if (n < 0){
       syslog(LOG_ERR, "Write error");
@@ -160,6 +198,8 @@ int main(){
     while(true) {
       bzero(&move_string, sizeof move_string);
       // get move from black
+      current_socket = black_fd;
+      reset_and_start_timer(default_timeout);
       n = read(black_fd, move_string, BUF_SIZE);
       if (n < 0){
         syslog(LOG_ERR, "Read error");
