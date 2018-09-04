@@ -190,7 +190,8 @@ int main(){
     bzero(&move_string, sizeof move_string);
     print_move(&current_move, &move_string);
     add_move_to_register(&global_register, &current_move); 
-    sendto(mcast_sock, move_string, strlen(move_string)+1, 0,
+    printf("Sending move: %s\n", move_string);
+    sendto(mcast_sock, move_string, strlen(move_string), 0,
               (struct sockaddr*)&multicastAddr, sizeof(multicastAddr)); 
   }
   return 0;

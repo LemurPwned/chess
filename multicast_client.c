@@ -46,7 +46,6 @@ void *epoll_read(){
   char msgbuf[BUFF_SIZE];
   int nbytes, count;
   int addrlen = sizeof(multicastAddrReceive);
-
   while(true){
     bzero(&msgbuf, sizeof(msgbuf));
     count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);

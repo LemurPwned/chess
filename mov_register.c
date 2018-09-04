@@ -29,7 +29,7 @@ bool validate_move(char *move){
 }
 
 char* print_move(struct chess_move *cm, char buffer[300]){
-  sprintf(buffer, "%d.%s %s", cm->move_id, cm->white, cm->black);
+  sprintf(buffer, "%d.%s %s\n", cm->move_id, cm->white, cm->black);
   return buffer;
 }
 
