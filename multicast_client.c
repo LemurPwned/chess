@@ -14,7 +14,7 @@
 #include "sock_utils.h"
 
 #define BUFF_SIZE 1000
-#define MCAST_ADDR "225.0.0.1"
+#define MCAST_ADDR "239.0.0.0"
 #define MAX_EVENTS 100
 struct sockaddr_in multicastAddrSend;
 struct sockaddr_in multicastAddrReceive;
@@ -63,46 +63,50 @@ void *epoll_read(){
 }
 
 int main(int argc, char *argv[]){
+  int port = 1234;
   bzero(&multicastAddrReceive, sizeof(multicastAddrReceive));
   bzero(&multicastAddrSend, sizeof(multicastAddrSend));
-  // server multicast address, common to both sockets
-  if (argc < 2){
-    perror("Invalid number of arguments: must be send port, receive port");
-  }
-  printf("%d %d\n", strtol(argv[1], NULL, 10), 
-        strtol(argv[2], NULL, 10));
-  int p1 = strtol(argv[1], NULL, 10);
-  int p2 = strtol(argv[2], NULL, 10);
   multicastAddrSend.sin_family = AF_INET;
   multicastAddrSend.sin_addr.s_addr = inet_addr(MCAST_ADDR);
-  multicastAddrSend.sin_port = htons(p1);
-
+  multicastAddrSend.sin_port = htons(port);
 
   multicastAddrReceive.sin_family = AF_INET;
   // receiving socket gets different local interface
   multicastAddrReceive.sin_addr.s_addr = htonl(INADDR_ANY);
-  multicastAddrReceive.sin_port = htons(p2);
+  multicastAddrReceive.sin_port = htons(port);
 
   // create two sockets
   mcast_sock_send = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   mcast_sock_recv = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
+  // for receiving socket only
+  struct ip_mreq mem;
+  // needed to join mcast membership group
+  // only receiving socket
+  mem.imr_multiaddr.s_addr = inet_addr(MCAST_ADDR);
+  mem.imr_interface.s_addr = inet_addr("127.0.0.1");
+  create_receiving_mcast_socket(&mcast_sock_recv, mem);
+
+  int optval = 1;
+  // set reuse port for receiving port and reuse addr
+  if (setsockopt(mcast_sock_recv, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0){
+        perror("Failed to reuse address\n");
+  }
+  if (setsockopt(mcast_sock_recv, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) < 0){
+    perror("Failed to reuse port\n");
+  }
   // bind a receiving socket
   if (bind(mcast_sock_recv, (struct sockaddr *) &multicastAddrReceive,
                                                     sizeof(multicastAddrReceive)) < 0){
     printf("%s\n", "Failed to bind a multicast socket");
   }
-  // set sending socket
-  create_sending_mcast_socket(&mcast_sock_send);
-
-  struct ip_mreq mem;
-  // needed to join mcast membership group
-  // only receiving socket
-  mem.imr_multiaddr.s_addr=inet_addr(MCAST_ADDR);
-  mem.imr_interface.s_addr=htonl(INADDR_ANY);
-  create_receiving_mcast_socket(&mcast_sock_recv, mem);
-
-
+  
+  struct in_addr local_interface;
+  local_interface.s_addr = inet_addr("127.0.0.1");
+  if (setsockopt(mcast_sock_send, IPPROTO_IP, IP_MULTICAST_IF, &local_interface, 
+      sizeof(local_interface)) < 0){
+      perror("Failed to set interface\n");
+  }
 
   // get epoll instance
   epoll_fd = epoll_create1(0);
@@ -110,7 +114,6 @@ int main(int argc, char *argv[]){
   event.events = EPOLLIN;
   event.data.fd = mcast_sock_recv;
 
-  printf("%d\n", mcast_sock_recv);
   if (epoll_fd < 0){
     perror("Epoll failed");
     exit(-1);
@@ -122,6 +125,10 @@ int main(int argc, char *argv[]){
   printf("%s\n", "Type in your alias for the chatroom");
   fgets(alias, 100, stdin);
   remove_char_from_string('\n', alias);
+  char msg[1024];
+  sprintf(msg, "New person has joined the chat: %s\n", alias);
+  sendto(mcast_sock_send, msg, strlen(msg), 0,
+                  (struct sockaddr *) &multicastAddrSend, sizeof(multicastAddrSend));
   strcat(alias, ": ");
 
   pthread_t reading_stdin, reading_socket;
@@ -132,7 +139,6 @@ int main(int argc, char *argv[]){
     perror("Failed creating an external thread");
   }
 
-  while(true){
-  }
+  while(true){}
   return 0;
 }

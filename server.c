@@ -12,13 +12,11 @@
 #include "sock_utils.h"
 
 #define BUF_SIZE 1000
-#define MCAST_ADDR "225.0.0.1"
+#define MCAST_ADDR "239.0.0.0"
 #define MAX_SOCK 2
 
 struct chess_register global_register;
 struct chess_move current_move;
-
-struct sockaddr_in multicastAddr;
 
 int process_command(char *command, int socket){
   if (strcmp(command, "quit") == 0){
@@ -44,19 +42,21 @@ int main(){
   char cmdline[BUF_SIZE];
   char msg[BUF_SIZE];
   char move_string[BUF_SIZE];
-
+  int n;
   int move_counter = 0;
-  struct sockaddr_in servaddr;
+  struct sockaddr_in servaddr, multicastAddr;
+  struct in_addr local_interface;
 
-  int listen_fd, white_fd, black_fd;
+  int listen_fd, white_fd, black_fd, mcast_sock;
+  // fetch mutlicast socket
+  mcast_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 
   // opensyslog, LOG as user and include PID and print to console 
   // in case of errors 
   openlog("SYSTEM_LOG", LOG_PID|LOG_CONS, LOG_USER);
 
   global_register.t_count = 0;
-
-  listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 
   bzero(&servaddr, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
@@ -66,8 +66,13 @@ int main(){
   bzero(&multicastAddr, sizeof(multicastAddr));   /* Zero out structure */
   multicastAddr.sin_family = AF_INET;                 /* Internet address family */
   multicastAddr.sin_addr.s_addr = inet_addr(MCAST_ADDR);/* Multicast IP address */
-  multicastAddr.sin_port = htons(6500);         /* Multicast port */
+  multicastAddr.sin_port = htons(1234);         /* Multicast port */
 
+  local_interface.s_addr = inet_addr("127.0.0.1");
+  if (setsockopt(mcast_sock, IPPROTO_IP, IP_MULTICAST_IF, &local_interface, 
+      sizeof(local_interface)) < 0){
+      perror("Failed to set interface\n");
+  }
 
   int on = 1;
   if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0){
@@ -102,12 +107,6 @@ int main(){
   }
   else printf("Black connected\n");
   syslog(LOG_INFO, "Connection established");
-
-
-  // fetch mutlicast socket
-  int mcast_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  create_sending_mcast_socket(&mcast_sock);
-  int n;
 
   while(true){
     // white begin
@@ -191,8 +190,8 @@ int main(){
     bzero(&move_string, sizeof move_string);
     print_move(&current_move, &move_string);
     add_move_to_register(&global_register, &current_move); 
-    sendto(mcast_sock, move_string, strlen(move_string), 0,
-              &multicastAddr, sizeof(multicastAddr)); 
+    sendto(mcast_sock, move_string, strlen(move_string)+1, 0,
+              (struct sockaddr*)&multicastAddr, sizeof(multicastAddr)); 
   }
   return 0;
 }
